@@ -11,8 +11,18 @@
 #include <sstream>
 #include "opencv2/core/utils/logger.hpp"
 #include <chrono>
+#include "mongoose.h"
 
 
+static void fn(struct mg_connection* c, int ev, void *ev_data, void* fn_data) {
+	
+	struct mg_http_serve_opts opts = {};   
+	std::filesystem::path webFilesRel("../WebFiles");
+	std::filesystem::path webFilesAbs = std::filesystem::absolute(webFilesRel);
+	std::string absString = webFilesAbs.generic_string();
+	opts.root_dir = absString.c_str(); // Serve local dir
+	if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (mg_http_message *)ev_data, &opts);
+}
 
 
 //warning, must free bitmaps allocated here
@@ -99,6 +109,13 @@ int main() {
 	cv::utils::logging::setLogLevel(cv::utils::logging::LogLevel::LOG_LEVEL_SILENT);
 
 
+	struct mg_mgr mgr;
+	mg_mgr_init(&mgr);
+	mg_http_listen(&mgr, "0.0.0.0:8000", fn, NULL);     // Create listening connection
+	
+	std::thread t([&]() {
+		for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
+	});
 
 
 	auto begin = std::chrono::high_resolution_clock::now();
@@ -171,6 +188,7 @@ int main() {
 
 	printf("Time measured: %.3f seconds. Time working: %.3f seconds.\n", elapsed.count() * 1e-9, timeWorking.count() * 1e-9);
 
+	t.join();
 
 	return 0;
 }

@@ -10,19 +10,19 @@ message(${OpenCV_INCLUDE_DIRS})
 # add the Potrace library
 add_subdirectory(Potrace)
 
+# add the Mongoose library
+add_subdirectory(mongoose)
+
 set( NAME_SRC
-    main.cpp    
+    main.cpp 
 )
 
 
 
-INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/Potrace)
-#INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/include)
+INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/Potrace ${CMAKE_CURRENT_SOURCE_DIR}/mongoose)
 
-add_executable( HelloWorldProject ${NAME_SRC} ${NAME_HEADERS} )
+add_executable( HelloWorldProject ${NAME_SRC} ${NAME_HEADERS})
 
-#TARGET_LINK_LIBRARIES (HelloWorldProject ${OpenCV_LIBS} ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/lib/PotraceLib.lib)         
-TARGET_LINK_LIBRARIES (HelloWorldProject PUBLIC ${OpenCV_LIBS} Potrace)         
+TARGET_LINK_LIBRARIES (HelloWorldProject PUBLIC ${OpenCV_LIBS} Potrace mongoose)         
 
 
-#target_link_libraries( HelloWorldProject ${OpenCV_LIBS} )
