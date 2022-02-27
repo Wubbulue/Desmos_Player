@@ -12,17 +12,82 @@
 #include "opencv2/core/utils/logger.hpp"
 #include <chrono>
 #include "mongoose.h"
+#include <vector>
+
+static const char* s_listen_on = "ws://localhost:8000";
+
+std::vector<mg_connection*> webSockets;
+std::queue<std::string> imgQueu;
+std::mutex imgMutex;
+std::mutex wsMutex;
 
 
-static void fn(struct mg_connection* c, int ev, void *ev_data, void* fn_data) {
-	
-	struct mg_http_serve_opts opts = {};   
-	std::filesystem::path webFilesRel("../WebFiles");
-	std::filesystem::path webFilesAbs = std::filesystem::absolute(webFilesRel);
-	std::string absString = webFilesAbs.generic_string();
-	opts.root_dir = absString.c_str(); // Serve local dir
-	if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (mg_http_message *)ev_data, &opts);
+void sendMessage(std::string message) {
+	wsMutex.lock();
+	for (auto & item : webSockets) {
+		mg_ws_send(item, message.c_str(), message.size(), WEBSOCKET_OP_TEXT);
+	}
+	wsMutex.unlock();
 }
+
+// This RESTful server implements the following endpoints:
+//   /websocket - upgrade to Websocket, and implement websocket echo server
+//   /api/rest - respond with JSON string {"result": 123}
+//   any other URI serves static files from s_web_root
+static void fn(struct mg_connection* c, int ev, void* ev_data, void* fn_data) {
+	if (ev == MG_EV_OPEN) {
+		// c->is_hexdumping = 1;
+	}
+	else if (ev == MG_EV_HTTP_MSG) {
+		struct mg_http_message* hm = (struct mg_http_message*)ev_data;
+		if (mg_http_match_uri(hm, "/websocket")) {
+			// Upgrade to websocket. From now on, a connection is a full-duplex
+			// Websocket connection, which will receive MG_EV_WS_MSG events.
+			printf("websocket opened\n");
+			wsMutex.lock();
+			mg_ws_upgrade(c, hm, NULL);
+			webSockets.push_back(c);
+			wsMutex.unlock();
+		}
+		else if (mg_http_match_uri(hm, "/rest")) {
+			// Serve REST response
+			mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
+		}
+		else {
+			// Serve static files
+
+			struct mg_http_serve_opts opts = {};
+			std::filesystem::path webFilesRel("../WebFiles");
+			std::filesystem::path webFilesAbs = std::filesystem::absolute(webFilesRel);
+			std::string absString = webFilesAbs.generic_string();
+			opts.root_dir = absString.c_str(); // Serve local dir
+			mg_http_serve_dir(c, (mg_http_message*)ev_data, &opts);
+		}
+	}
+	else if (ev == MG_EV_WS_MSG) {
+		// Got websocket frame. Received data is wm->data. Echo it back!
+		struct mg_ws_message* wm = (struct mg_ws_message*)ev_data;
+		if (strcmp(wm->data.ptr,"photo") == 0) {
+			imgMutex.lock();
+			sendMessage(imgQueu.front());
+			imgQueu.pop();
+			imgMutex.unlock();
+		}
+		//mg_ws_send(c, wm->data.ptr, wm->data.len, WEBSOCKET_OP_TEXT);
+	}
+	(void)fn_data;
+}
+
+//
+//static void fn(struct mg_connection* c, int ev, void *ev_data, void* fn_data) {
+//	
+//	struct mg_http_serve_opts opts = {};   
+//	std::filesystem::path webFilesRel("../WebFiles");
+//	std::filesystem::path webFilesAbs = std::filesystem::absolute(webFilesRel);
+//	std::string absString = webFilesAbs.generic_string();
+//	opts.root_dir = absString.c_str(); // Serve local dir
+//	if (ev == MG_EV_HTTP_MSG) mg_http_serve_dir(c, (mg_http_message *)ev_data, &opts);
+//}
 
 
 //warning, must free bitmaps allocated here
@@ -104,14 +169,20 @@ std::string shapeListToString(shapeList shapelist) {
 	return str;
 }
 
+
+
+
 int main() {
 
 	cv::utils::logging::setLogLevel(cv::utils::logging::LogLevel::LOG_LEVEL_SILENT);
 
 
+
 	struct mg_mgr mgr;
 	mg_mgr_init(&mgr);
-	mg_http_listen(&mgr, "0.0.0.0:8000", fn, NULL);     // Create listening connection
+	mg_http_listen(&mgr, s_listen_on, fn, NULL);     // Create listening connection
+	printf("Starting WS listener on %s/websocket\n", s_listen_on);
+
 	
 	std::thread t([&]() {
 		for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
@@ -134,7 +205,6 @@ int main() {
 	}
 
 	auto settings = potrace_param_default();
-
 
 	for (int i = 0; i < 1000; i++) {
 		cv::Mat frame, gray;
@@ -163,7 +233,11 @@ int main() {
 			auto output = potrace_trace(settings, bitmap);
 
 			auto shapelist = pageLatex(output->plist, &imgInfo);
+
+			imgMutex.lock();
 			auto str = shapeListToString(shapelist);
+			imgQueu.push(str);
+			imgMutex.unlock();
 
 			potrace_state_free(output);
 			free(shapelist.shapes);
@@ -189,6 +263,8 @@ int main() {
 	printf("Time measured: %.3f seconds. Time working: %.3f seconds.\n", elapsed.count() * 1e-9, timeWorking.count() * 1e-9);
 
 	t.join();
+	mg_mgr_free(&mgr);
+
 
 	return 0;
 }

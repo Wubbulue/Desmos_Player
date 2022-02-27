@@ -17,7 +17,7 @@
 #include "backend_latex.h"
 
 #define UNDEF ((double)(1e30))   /* a value to represent "undefined" */
-#define SCALE 0.2
+#define SCALE 0.1
 
 
 struct shapeList shapelist;
