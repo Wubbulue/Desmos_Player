@@ -6,32 +6,59 @@ var calculator = Desmos.GraphingCalculator(elt);
 console.log(window.location.href);
 
 var expressionID = 0;
+var frame = 0;
 
 // var ws = new WebSocket(url.value);
 
 var wsString = "ws://" + location.host + "/websocket";
 console.log(wsString);
+
+var timer;
+
+
 ws = new WebSocket(wsString);
 
 ws.onopen = function () {
     console.log("websocket opened!")
 };
 
+function updateFrameCounter(){
+}
+
 ws.onmessage = function (ev) { 
-    console.log("message recieved")
-    console.log(ev)
-    var split = ev.data.split("\n");
 
-    expressionID--;
+    //our packet is delimted by $ [ended, time in S, frame number, latex ]
+    const args = ev.data.split("$");
+    console.log(args);
 
-    for(expressionID;expressionID>=0;expressionID--){
-        calculator.removeExpression({id:expressionID.toString()});
+
+
+    if(args[0]!="0"){
+        stop();
+        return;
     }
+
+    var split = args[3].split("\n");
+    console.log(split.length);
+
+
+    var tmpState = calculator.getState();
+    //make sure the id is different for each expression
+    tmpState.expressions.list = [];
+
+    tmpState.expressions.list.push({ type: "text", text: "Frame count: " + args[2] });
+    tmpState.expressions.list.push({ type: "text", text: "Video time: " + args[1] });
 
     for(var item of split){
-        calculator.setExpression({id:expressionID.toString(),latex: item,secret: true,color:Desmos.Colors.BLUE});
-        expressionID++;
+        // calculator.setExpression({latex: item,secret: true,color:Desmos.Colors.BLUE});
+        tmpState.expressions.list.push({type:"expression",latex: item,secret: true,color:Desmos.Colors.BLUE});
+        // expressionID++;
     }
+
+    calculator.setState(tmpState);
+
+    frame++;
+
 };
 ws.onerror = function (ev) {
     console.log("web socket error")
@@ -49,7 +76,39 @@ function send(val){
     }
 };
 
-setInterval(function(){
-    send("photo");
-} , 10000 );
+function start(){
+    timer = setInterval(function () {
+        send("photo");
+    }, 3500);
+};
+
+function stop() {
+    clearInterval(timer);
+
+    var tmpState = calculator.getState();
+    //make sure the id is different for each expression
+
+    tmpState.expressions.list.push({ type: "text", text: "Video ended!"});
+
+    calculator.setState(tmpState);
+
+}
+
+function screenshot(){
+    html2canvas(document.body).then(function(canvas) {
+
+        var dataURL = canvas.toDataURL("image/png");
+        var data = atob(dataURL.substring("data:image/png;base64,".length)),
+            asArray = new Uint8Array(data.length);
+
+        for (var i = 0, len = data.length; i < len; ++i) {
+            asArray[i] = data.charCodeAt(i);
+        }
+
+        var blob = new Blob([asArray.buffer], { type: "image/png" });
+
+        send(blob);
+
+    });
+};
 
