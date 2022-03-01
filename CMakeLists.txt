@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 set (CMAKE_CXX_STANDARD 17)
 
  
-PROJECT (HelloWorldProject)
+PROJECT (DesmosTracer)
 find_package(OpenCV REQUIRED )
 INCLUDE_DIRECTORIES( ${OpenCV_INCLUDE_DIRS} )
 message(${OpenCV_INCLUDE_DIRS})
@@ -21,8 +21,8 @@ set( NAME_SRC
 
 INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/Potrace ${CMAKE_CURRENT_SOURCE_DIR}/mongoose)
 
-add_executable( HelloWorldProject ${NAME_SRC} ${NAME_HEADERS})
+add_executable( DesmosTracer ${NAME_SRC} ${NAME_HEADERS})
 
-TARGET_LINK_LIBRARIES (HelloWorldProject PUBLIC ${OpenCV_LIBS} Potrace mongoose)         
+TARGET_LINK_LIBRARIES (DesmosTracer PUBLIC ${OpenCV_LIBS} Potrace mongoose)         
 
 

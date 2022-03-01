@@ -16,9 +16,9 @@
 #include <vector>
 #include <cmath>
 
-#define FPS_PERCENTAGE 0.2 
-#define END_TIME  140
-#define START_TIME 130
+#define FPS_PERCENTAGE 1
+#define END_TIME  90
+#define START_TIME 30
 #define VIDEO_FILE "../images/badapple.mp4"
 
 static const char* s_listen_on = "ws://localhost:8000";
@@ -28,6 +28,13 @@ std::queue<std::string> imgQueu;
 std::mutex imgMutex;
 std::mutex wsMutex;
 
+std::shared_ptr<cv::VideoWriter> outputVideo = NULL;
+
+int screenshotNum = 0;
+
+#define VIDEO_FILE_OUPUT "../images/screenrecord2.avi"
+//this is output fps of our video file
+double outFPS = 0;
 
 void sendMessage(std::string message) {
 	wsMutex.lock();
@@ -72,14 +79,22 @@ static void fn(struct mg_connection* c, int ev, void* ev_data, void* fn_data) {
 		}
 	}
 	else if (ev == MG_EV_WS_MSG) {
-		// Got websocket frame. Received data is wm->data. Echo it back!
+
 		struct mg_ws_message* wm = (struct mg_ws_message*)ev_data;
+
+		//client has requested a new photo
 		if ((strcmp(wm->data.ptr, "photo") == 0)) {
 			if (imgQueu.empty()) {
+
 				printf("we are finished playing our video!");
 
 				//send terminated packet
 				sendMessage("1");
+
+				//if we were writing a video, close it!
+				if(outputVideo)
+					outputVideo->release();
+
 
 			}
 			else {
@@ -90,7 +105,8 @@ static void fn(struct mg_connection* c, int ev, void* ev_data, void* fn_data) {
 			}
 		}
 		else { // binary blob, try saving image
-			std::ofstream image("../images/screenshot.png", std::ios::binary);
+
+			//std::ofstream image("../images/screenshot"+ std::to_string(screenshotNum++) + ".png", std::ios::binary);
 
 			//opencv demands a vector for imdecode function for some reason
 			std::vector<char> charVec;
@@ -98,8 +114,13 @@ static void fn(struct mg_connection* c, int ev, void* ev_data, void* fn_data) {
 
 			cv::Mat imMat = cv::imdecode(charVec, cv::ImreadModes::IMREAD_COLOR);
 
-			image.write(wm->data.ptr, wm->data.len);
-			image.close();
+			//if this is our first frame, open video writer
+			if(outputVideo==NULL)
+				outputVideo = std::make_shared<cv::VideoWriter>(VIDEO_FILE_OUPUT, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), outFPS, cv::Size(imMat.cols, imMat.rows));
+			outputVideo->write(imMat);
+
+			//image.write(wm->data.ptr, wm->data.len);
+			//image.close();
 		}
 	}
 	(void)fn_data;
@@ -142,25 +163,20 @@ potrace_bitmap_t* matToBitMap(cv::Mat& mat) {
 			bitpos--;
 
 			if (bitpos == -1) {
-				(*bitmap).map[arrPos++] = word;
+				bitmap->map[arrPos++] = word;
 				bitpos = 31;
 				word = 0x00000000;
 			}
-			//printf("Pixel at: %d,%d has value %d\n", j, i, val);
 		}
 
 		//if we just wrote a word, don't write the current one
 		//TODO: test this
 		if (bitpos != 31) {
-			(*bitmap).map[arrPos++] = word;
+			bitmap->map[arrPos++] = word;
 			bitpos = wordLength - 1;
 			word = 0x00000000;
 		}
 	}
-
-	//for (int i = 0; i < arrPos; i++) {
-	//	printf("Postion %d val:%X\n", i, bitmap->map[i]);
-	//}
 
 	return bitmap;
 
@@ -221,6 +237,8 @@ int main() {
 	double fps = cap.get(cv::CAP_PROP_FPS);
 	auto frame_count = cap.get(cv::CAP_PROP_FRAME_COUNT);
 	auto duration = frame_count / fps;
+
+	outFPS = fps * FPS_PERCENTAGE;
 
 	printf("fps = %f\n", fps);
 	printf("Number of frames = %f\n", frame_count);

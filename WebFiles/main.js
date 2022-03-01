@@ -1,14 +1,9 @@
 var elt = document.getElementById('calculator');
 var calculator = Desmos.GraphingCalculator(elt);
-// calculator.setExpression({ latex: 'y=x^2' });
-// calculator.setExpression({latex: '\\left(\\left(1-t\\right)223+t224,\\left(1-t\\right)556+t562\\right)' });
 
 console.log(window.location.href);
 
-var expressionID = 0;
-var frame = 0;
 
-// var ws = new WebSocket(url.value);
 
 var wsString = "ws://" + location.host + "/websocket";
 console.log(wsString);
@@ -38,6 +33,8 @@ ws.onmessage = function (ev) {
         return;
     }
 
+    screenshot();
+
     var split = args[3].split("\n");
     console.log(split.length);
 
@@ -52,12 +49,11 @@ ws.onmessage = function (ev) {
     for(var item of split){
         // calculator.setExpression({latex: item,secret: true,color:Desmos.Colors.BLUE});
         tmpState.expressions.list.push({type:"expression",latex: item,secret: true,color:Desmos.Colors.BLUE});
-        // expressionID++;
     }
 
     calculator.setState(tmpState);
 
-    frame++;
+
 
 };
 ws.onerror = function (ev) {
@@ -67,6 +63,7 @@ ws.onerror = function (ev) {
 ws.onclose = function () {
     ws = null;
     console.log("websocket closed")
+    stop();
 };
 
 function send(val){
@@ -79,7 +76,7 @@ function send(val){
 function start(){
     timer = setInterval(function () {
         send("photo");
-    }, 3500);
+    }, 2000);
 };
 
 function stop() {
@@ -95,6 +92,7 @@ function stop() {
 }
 
 function screenshot(){
+
     html2canvas(document.body).then(function(canvas) {
 
         var dataURL = canvas.toDataURL("image/png");
