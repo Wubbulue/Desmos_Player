@@ -16,9 +16,9 @@
 #include <vector>
 #include <cmath>
 
-#define FPS_PERCENTAGE 1
-#define END_TIME  90
-#define START_TIME 30
+#define FPS_PERCENTAGE 1 // use this option to scale the frame rate of your video playback. Must be between 0 and 1.
+#define END_TIME  90 // use this option to set the desired end time for your video
+#define START_TIME 30 // use this option to set the desired start time for your video
 #define VIDEO_FILE "../images/badapple.mp4"
 
 static const char* s_listen_on = "ws://localhost:8000";
